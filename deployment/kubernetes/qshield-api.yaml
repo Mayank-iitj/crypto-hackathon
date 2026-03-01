@@ -1,0 +1,259 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: qshield
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: qshield-config
+  namespace: qshield
+data:
+  APP_NAME: "Q-Shield"
+  ENVIRONMENT: "production"
+  LOG_LEVEL: "INFO"
+  LOG_FORMAT: "json"
+  API_HOST: "0.0.0.0"
+  API_PORT: "8000"
+  DEBUG: "false"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: qshield-secrets
+  namespace: qshield
+type: Opaque
+stringData:
+  database-url: "postgresql://qshield:password@postgres:5432/qshield"
+  redis-url: "redis://redis:6379/0"
+  secret-key: "your-super-secret-key-min-32-chars"
+  jwt-private-key: |
+    -----BEGIN RSA PRIVATE KEY-----
+    # Paste min-length 4096-bit RSA private key
+    -----END RSA PRIVATE KEY-----
+  jwt-public-key: |
+    -----BEGIN PUBLIC KEY-----
+    # Paste corresponding public key
+    -----END PUBLIC KEY-----
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qshield-api
+  namespace: qshield
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: qshield-api
+  template:
+    metadata:
+      labels:
+        app: qshield-api
+    spec:
+      serviceAccountName: qshield-api
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: api
+        image: qshield:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+        envFrom:
+        - configMapRef:
+            name: qshield-config
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: qshield-secrets
+              key: database-url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: qshield-secrets
+              key: redis-url
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: qshield-secrets
+              key: secret-key
+        - name: JWT_PRIVATE_KEY_PATH
+          value: /secrets/jwt_private.pem
+        - name: JWT_PUBLIC_KEY_PATH
+          value: /secrets/jwt_public.pem
+        - name: PLATFORM_SIGNING_KEY_PATH
+          value: /secrets/platform_signing.pem
+        - name: PLATFORM_PUBLIC_KEY_PATH
+          value: /secrets/platform_public.pem
+        volumeMounts:
+        - name: secrets
+          mountPath: /secrets
+          readOnly: true
+        - name: logs
+          mountPath: /var/log/qshield
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+      volumes:
+      - name: secrets
+        secret:
+          secretName: qshield-secrets
+      - name: logs
+        emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: qshield-api
+  namespace: qshield
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  selector:
+    app: qshield-api
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: qshield-api-hpa
+  namespace: qshield
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: qshield-api
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: qshield-api-network-policy
+  namespace: qshield
+spec:
+  podSelector:
+    matchLabels:
+      app: qshield-api
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8000
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app: qshield-postgres
+    ports:
+    - protocol: TCP
+      port: 5432
+  - to:
+    - podSelector:
+        matchLabels:
+          app: qshield-redis
+    ports:
+    - protocol: TCP
+      port: 6379
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: qshield-api
+  namespace: qshield
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: qshield-api-role
+  namespace: qshield
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: qshield-api-binding
+  namespace: qshield
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: qshield-api-role
+subjects:
+- kind: ServiceAccount
+  name: qshield-api
+  namespace: qshield
