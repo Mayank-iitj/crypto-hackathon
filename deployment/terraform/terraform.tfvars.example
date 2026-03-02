@@ -1,0 +1,42 @@
+# Example Terraform Variables
+# Copy to terraform.tfvars and fill in with actual values
+
+aws_region      = "us-east-1"
+aws_account_id  = "123456789012"
+environment     = "production"
+vpc_cidr        = "10.0.0.0/16"
+
+# EKS Configuration
+kubernetes_version = "1.28"
+instance_types     = ["t3.large"]
+desired_capacity   = 3
+min_capacity       = 2
+max_capacity       = 10
+
+# Database Configuration
+db_instance_class = "db.t4g.medium"
+db_password       = "CHANGE-ME-STRONG-PASSWORD"
+
+# Redis Configuration
+redis_node_type = "cache.t4g.micro"
+redis_num_nodes = 2
+
+# Network Configuration
+allowed_cidrs = [
+  "0.0.0.0/0"  # In production, restrict to your organization's IP ranges
+]
+
+# Domain Configuration
+domain_name   = "yourdomain.com"
+api_subdomain = "api"
+
+# Monitoring
+enable_monitoring    = true
+log_retention_days   = 30
+
+# Additional Tags
+tags = {
+  Owner       = "DevOps Team"
+  CostCenter  = "Engineering"
+  Compliance  = "SOC2"
+}

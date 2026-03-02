@@ -1,8 +1,23 @@
 # Q-Shield: Cryptographic Intelligence Platform for Post-Quantum Readiness
 
-![Q-Shield](docs/qshield-logo.png)
-
 A production-grade, enterprise-ready platform that automatically discovers internet-facing banking assets, scans cryptographic configurations, evaluates Post-Quantum Cryptography (PQC) readiness, and issues digitally verifiable Quantum-Safe Certificates.
+
+## 🚀 Quick Start
+
+**Get running in 2 minutes:**
+
+```bash
+cd c:\projects\q-shield
+docker compose up -d
+```
+
+Then access:
+- **Frontend**: http://localhost:3000
+- **API Docs**: http://localhost:8000/docs
+- **Grafana Dashboards**: http://localhost:3001
+- **Kibana Logs**: http://localhost:5601
+
+📖 **Full documentation**: See [QUICK_START.md](QUICK_START.md)
 
 ## 🎯 Mission
 
@@ -10,6 +25,26 @@ Q-Shield enables banks and financial institutions to:
 - **Detect quantum vulnerabilities today** before CRQCs (Cryptographically Relevant Quantum Computers) emerge
 - **Transition to Post-Quantum Cryptography** systematically and securely
 - **Maintain regulatory compliance** with NIST, ISO 27001, and RBI Cyber Security Framework
+
+## 📚 Documentation
+
+| Document | Purpose | Audience |
+|----------|---------|----------|
+| [QUICK_START.md](QUICK_START.md) | 2-minute setup guide | Everyone |
+| [DOCUMENTATION_INDEX.md](DOCUMENTATION_INDEX.md) | Complete doc index | Oriented reference |
+| [PRODUCTION_DEPLOYMENT_SUMMARY.md](PRODUCTION_DEPLOYMENT_SUMMARY.md) | What's included | Leads/Architects |
+| [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) | Single-server deployment | DevOps/SRE |
+| [deployment/terraform/README.md](deployment/terraform/README.md) | AWS cloud deployment | Cloud Engineers |
+| [deployment/helm/HELM_GUIDE.md](deployment/helm/HELM_GUIDE.md) | Kubernetes deployment | K8s Operators |
+| [PRODUCTION_READINESS_CHECKLIST.md](PRODUCTION_READINESS_CHECKLIST.md) | Pre-launch validation | Engineering Leads |
+| [OPERATIONS_REFERENCE.md](OPERATIONS_REFERENCE.md) | Monitoring & runbooks | On-call Engineers |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design | Architects/Mentors |
+| [docs/API.md](docs/API.md) | API reference | API Users |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Code standards | Developers |
+| [docs/SECURITY.md](docs/SECURITY.md) | Security model | Security Teams |
+| [docs/OAUTH_SETUP.md](docs/OAUTH_SETUP.md) | OAuth integration | Integrators |
+
+**→ Start here:** [QUICK_START.md](QUICK_START.md) or [DOCUMENTATION_INDEX.md](DOCUMENTATION_INDEX.md)
 
 ## ✨ Key Features
 

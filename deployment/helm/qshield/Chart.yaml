@@ -1,0 +1,51 @@
+apiVersion: v2
+name: qshield
+description: Q-Shield - Quantum-Ready Security Platform
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+
+keywords:
+  - security
+  - quantum
+  - compliance
+  - monitoring
+
+home: https://github.com/youraccount/q-shield
+sources:
+  - https://github.com/youraccount/q-shield
+
+maintainers:
+  - name: Q-Shield Team
+    email: team@yourdomain.com
+
+dependencies:
+  - name: postgresql
+    version: "12.x.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: postgresql.enabled
+  
+  - name: redis
+    version: "17.x.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: redis.enabled
+  
+  - name: prometheus
+    version: "15.x.x"
+    repository: "https://prometheus-community.github.io/helm-charts"
+    condition: prometheus.enabled
+  
+  - name: grafana
+    version: "6.x.x"
+    repository: "https://grafana.github.io/helm-charts"
+    condition: grafana.enabled
+  
+  - name: elasticsearch
+    version: "7.x.x"
+    repository: "https://helm.elastic.co"
+    condition: elasticsearch.enabled
+  
+  - name: kibana
+    version: "7.x.x"
+    repository: "https://helm.elastic.co"
+    condition: kibana.enabled

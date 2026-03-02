@@ -1,0 +1,249 @@
+# Q-Shield Helm Chart - Default Values
+# Production overrides available in values-production.yaml
+
+replicaCount: 3
+
+image:
+  repository: ghcr.io/youraccount/q-shield-api
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8000"
+  prometheus.io/path: "/metrics"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  type: ClusterIP
+  port: 8000
+  targetPort: 8000
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: api.yourdomain.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: qshield-api-tls
+      hosts:
+        - api.yourdomain.com
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 1Gi
+  requests:
+    cpu: 250m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values:
+                  - qshield-api
+          topologyKey: kubernetes.io/hostname
+
+# Environment Configuration
+env:
+  ENVIRONMENT: "production"
+  LOG_LEVEL: "INFO"
+  DEBUG: "false"
+
+# Secrets mounted as environment variables
+secrets:
+  - name: database-password
+    key: DATABASE_PASSWORD
+  - name: redis-password
+    key: REDIS_PASSWORD
+  - name: secret-key
+    key: SECRET_KEY
+  - name: google-client-id
+    key: GOOGLE_CLIENT_ID
+  - name: google-client-secret
+    key: GOOGLE_CLIENT_SECRET
+  - name: github-client-id
+    key: GITHUB_CLIENT_ID
+  - name: github-client-secret
+    key: GITHUB_CLIENT_SECRET
+
+# Health checks
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8000
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 8000
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 2
+
+# Database Configuration
+postgresql:
+  enabled: true
+  auth:
+    username: qshield
+    password: changeme
+    database: qshield
+  primary:
+    persistence:
+      enabled: true
+      size: 50Gi
+    resources:
+      limits:
+        memory: 1Gi
+      requests:
+        memory: 512Mi
+
+# Redis Configuration
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    password: changeme
+  master:
+    persistence:
+      enabled: true
+      size: 10Gi
+  replica:
+    replicaCount: 2
+
+# Prometheus Configuration
+prometheus:
+  enabled: true
+  prometheusSpec:
+    retention: 30d
+    resources:
+      limits:
+        memory: 1Gi
+      requests:
+        memory: 512Mi
+
+# Grafana Configuration
+grafana:
+  enabled: true
+  adminPassword: changeme
+  persistence:
+    enabled: true
+    size: 5Gi
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          url: http://{{ .Release.Name }}-prometheus-operated:9090
+          access: proxy
+          isDefault: true
+
+# Elasticsearch Configuration
+elasticsearch:
+  enabled: true
+  replicas: 3
+  minimumMasterNodes: 2
+  esJavaOpts: "-Xmx1g -Xms1g"
+  persistence:
+    enabled: true
+    size: 30Gi
+
+# Kibana Configuration
+kibana:
+  enabled: true
+  elasticsearchHosts: "http://{{ .Release.Name }}-elasticsearch:9200"
+  kibanaConfig:
+    kibana.yml:
+      xpack.security.enabled: false
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+# Network Policy
+networkPolicy:
+  enabled: true
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: qshield
+      ports:
+        - protocol: TCP
+          port: 8000
+
+# Monitoring
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    scrapeTimeout: 10s
+
+# Backup Configuration
+backup:
+  enabled: true
+  schedule: "0 2 * * *"  # Daily at 2 AM UTC
+  retention: 30  # Days
+
+# Additional configuration
+extraEnv: {}
+
+extraVolumes: []
+
+extraVolumeMounts: []
+
+# Persistence for application data/logs
+persistence:
+  enabled: true
+  storageClassName: default
+  size: 10Gi
+  mountPath: /var/lib/qshield

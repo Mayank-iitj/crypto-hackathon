@@ -1,0 +1,142 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "qshield.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "qshield.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "qshield.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "qshield.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "qshield.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      
+      initContainers:
+      - name: wait-for-db
+        image: busybox:latest
+        command: ['sh', '-c', 'until nc -z {{ .Release.Name }}-postgresql 5432; do echo waiting for db; sleep 2; done']
+      
+      - name: wait-for-redis
+        image: busybox:latest
+        command: ['sh', '-c', 'until nc -z {{ .Release.Name }}-redis-master 6379; do echo waiting for redis; sleep 2; done']
+      
+      containers:
+      - name: {{ .Chart.Name }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 12 }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: 8000
+          protocol: TCP
+        - name: metrics
+          containerPort: 9000
+          protocol: TCP
+        
+        env:
+        - name: DATABASE_HOST
+          value: "{{ .Release.Name }}-postgresql"
+        - name: DATABASE_PORT
+          value: "5432"
+        - name: DATABASE_NAME
+          value: {{ .Values.postgresql.auth.database | quote }}
+        - name: DATABASE_USER
+          value: {{ .Values.postgresql.auth.username | quote }}
+        - name: DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "qshield.fullname" . }}-secrets
+              key: DATABASE_PASSWORD
+        
+        - name: REDIS_HOST
+          value: "{{ .Release.Name }}-redis-master"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "qshield.fullname" . }}-secrets
+              key: REDIS_PASSWORD
+        
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "qshield.fullname" . }}-secrets
+              key: SECRET_KEY
+        
+        {{- range $key, $value := .Values.env }}
+        - name: {{ $key }}
+          value: {{ $value | quote }}
+        {{- end }}
+        
+        {{- range .Values.secrets }}
+        - name: {{ .key }}
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "qshield.fullname" . }}-secrets
+              key: {{ .key }}
+        {{- end }}
+        
+        livenessProbe:
+          {{- toYaml .Values.livenessProbe | nindent 12 }}
+        
+        readinessProbe:
+          {{- toYaml .Values.readinessProbe | nindent 12 }}
+        
+        resources:
+          {{- toYaml .Values.resources | nindent 12 }}
+        
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: var-temp
+          mountPath: /var/tmp
+        {{- with .Values.extraVolumeMounts }}
+          {{- toYaml . | nindent 12 }}
+        {{- end }}
+      
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: var-temp
+        emptyDir: {}
+      {{- if .Values.persistence.enabled }}
+      - name: data
+        persistentVolumeClaim:
+          claimName: {{ include "qshield.fullname" . }}-data
+      {{- end }}
+      {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

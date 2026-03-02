@@ -1,0 +1,18 @@
+{{- if .Values.monitoring.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "qshield.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "qshield.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "qshield.selectorLabels" . | nindent 6 }}
+  endpoints:
+  - port: metrics
+    interval: {{ .Values.monitoring.serviceMonitor.interval }}
+    scrapeTimeout: {{ .Values.monitoring.serviceMonitor.scrapeTimeout }}
+    path: /metrics
+{{- end }}

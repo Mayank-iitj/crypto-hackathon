@@ -6,7 +6,7 @@ SQLAlchemy ORM models for all entities.
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional, List
-import uuid
+import uuid as uuid_module
 
 from sqlalchemy import (
     String, Text, Boolean, Integer, Float, DateTime, JSON, 
@@ -70,8 +70,8 @@ class Organization(Base):
     
     __tablename__ = "organizations"
     
-    uuid: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), default=uuid.uuid4, unique=True, index=True
+    uuid: Mapped[uuid_module.UUID] = mapped_column(
+        UUID(as_uuid=True), default=uuid_module.uuid4, unique=True, index=True
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     domain: Mapped[str] = mapped_column(String(255), nullable=True)
@@ -89,8 +89,8 @@ class User(Base):
     
     __tablename__ = "users"
     
-    uuid: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), default=uuid.uuid4, unique=True, index=True
+    uuid: Mapped[uuid_module.UUID] = mapped_column(
+        UUID(as_uuid=True), default=uuid_module.uuid4, unique=True, index=True
     )
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
@@ -131,8 +131,8 @@ class Asset(Base):
     
     __tablename__ = "assets"
     
-    uuid: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), default=uuid.uuid4, unique=True, index=True
+    uuid: Mapped[uuid_module.UUID] = mapped_column(
+        UUID(as_uuid=True), default=uuid_module.uuid4, unique=True, index=True
     )
     
     # Basic identification
@@ -190,8 +190,8 @@ class Scan(Base):
     
     __tablename__ = "scans"
     
-    uuid: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), default=uuid.uuid4, unique=True, index=True
+    uuid: Mapped[uuid_module.UUID] = mapped_column(
+        UUID(as_uuid=True), default=uuid_module.uuid4, unique=True, index=True
     )
     
     name: Mapped[str] = mapped_column(String(255), nullable=True)
@@ -238,8 +238,8 @@ class ScanResult(Base):
     
     __tablename__ = "scan_results"
     
-    uuid: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), default=uuid.uuid4, unique=True, index=True
+    uuid: Mapped[uuid_module.UUID] = mapped_column(
+        UUID(as_uuid=True), default=uuid_module.uuid4, unique=True, index=True
     )
     
     # References
@@ -310,8 +310,8 @@ class QuantumSafeCertificate(Base):
     
     __tablename__ = "quantum_safe_certificates"
     
-    uuid: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), default=uuid.uuid4, unique=True, index=True
+    uuid: Mapped[uuid_module.UUID] = mapped_column(
+        UUID(as_uuid=True), default=uuid_module.uuid4, unique=True, index=True
     )
     
     certificate_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
@@ -383,8 +383,8 @@ class AuditLog(Base):
     
     __tablename__ = "audit_logs"
     
-    uuid: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), default=uuid.uuid4, unique=True, index=True
+    uuid: Mapped[uuid_module.UUID] = mapped_column(
+        UUID(as_uuid=True), default=uuid_module.uuid4, unique=True, index=True
     )
     
     event_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
@@ -411,8 +411,8 @@ class CBOMExport(Base):
     
     __tablename__ = "cbom_exports"
     
-    uuid: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), default=uuid.uuid4, unique=True, index=True
+    uuid: Mapped[uuid_module.UUID] = mapped_column(
+        UUID(as_uuid=True), default=uuid_module.uuid4, unique=True, index=True
     )
     
     name: Mapped[str] = mapped_column(String(255), nullable=False)

@@ -1,0 +1,188 @@
+# Production overrides for Q-Shield Helm Chart
+# Usage: helm install qshield ./deployment/helm/qshield -f ./deployment/helm/values-production.yaml
+
+replicaCount: 3
+
+image:
+  tag: "v1.0.0"  # Use specific version in production, not 'latest'
+  pullPolicy: IfNotPresent
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 2Gi
+  requests:
+    cpu: 500m
+    memory: 1Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Production database settings
+postgresql:
+  enabled: true
+  auth:
+    username: qshield
+    password: changeme-production-strong-password
+    database: qshield
+  primary:
+    persistence:
+      enabled: true
+      size: 100Gi
+      storageClassName: fast-ssd
+    resources:
+      limits:
+        memory: 2Gi
+        cpu: 1000m
+      requests:
+        memory: 1Gi
+        cpu: 500m
+  replica:
+    replicaCount: 2
+
+# Production Redis settings with cluster mode
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    password: changeme-production-strong-password
+  master:
+    persistence:
+      enabled: true
+      size: 20Gi
+      storageClassName: fast-ssd
+    resources:
+      limits:
+        memory: 2Gi
+      requests:
+        memory: 1Gi
+  replica:
+    replicaCount: 3
+    resources:
+      limits:
+        memory: 2Gi
+      requests:
+        memory: 1Gi
+
+# Production Prometheus
+prometheus:
+  enabled: true
+  prometheusSpec:
+    retention: 90d  # Longer retention in production
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: fast-ssd
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 50Gi
+    resources:
+      limits:
+        memory: 2Gi
+      requests:
+        memory: 1Gi
+
+# Production Grafana
+grafana:
+  enabled: true
+  adminPassword: changeme-production-strong-password
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClassName: fast-ssd
+  resources:
+    limits:
+      memory: 1Gi
+    requests:
+      memory: 512Mi
+
+# Production Elasticsearch
+elasticsearch:
+  enabled: true
+  replicas: 3
+  minimumMasterNodes: 2
+  esJavaOpts: "-Xmx2g -Xms2g"
+  persistence:
+    enabled: true
+    size: 100Gi
+    storageClassName: fast-ssd
+  resources:
+    limits:
+      memory: 3Gi
+      cpu: 1000m
+    requests:
+      memory: 2Gi
+      cpu: 500m
+
+# Production Kibana
+kibana:
+  enabled: true
+  elasticsearchHosts: "http://qshield-elasticsearch:9200"
+  resources:
+    limits:
+      memory: 1Gi
+    requests:
+      memory: 512Mi
+
+# Production ingress
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/limit-rps: "50"
+  hosts:
+    - host: api.yourdomain.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: qshield-api-tls
+      hosts:
+        - api.yourdomain.com
+
+# Production Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+# Production monitoring
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    scrapeTimeout: 10s
+
+# Production persistence
+persistence:
+  enabled: true
+  storageClassName: fast-ssd
+  size: 50Gi
+
+# OAuth Production Credentials (FILL THESE IN)
+oauth:
+  google:
+    clientId: "YOUR_GOOGLE_CLIENT_ID"
+    clientSecret: "YOUR_GOOGLE_CLIENT_SECRET"
+  github:
+    clientId: "YOUR_GITHUB_CLIENT_ID"
+    clientSecret: "YOUR_GITHUB_CLIENT_SECRET"
+  microsoft:
+    clientId: "YOUR_MICROSOFT_CLIENT_ID"
+    clientSecret: "YOUR_MICROSOFT_CLIENT_SECRET"
+
+# Production environment settings
+env:
+  ENVIRONMENT: "production"
+  LOG_LEVEL: "WARNING"
+  DEBUG: "false"
+  ALLOWED_HOSTS: '["api.yourdomain.com"]'
+  CORS_ORIGINS: '["https://yourdomain.com"]'

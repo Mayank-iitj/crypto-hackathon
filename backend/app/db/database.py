@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy.pool import QueuePool
+from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
 
@@ -69,11 +69,7 @@ class DatabaseManager:
             
             cls._engine = create_async_engine(
                 db_url,
-                poolclass=QueuePool,
-                pool_size=settings.DATABASE_POOL_SIZE,
-                max_overflow=settings.DATABASE_MAX_OVERFLOW,
-                pool_timeout=settings.DATABASE_POOL_TIMEOUT,
-                pool_pre_ping=True,
+                poolclass=NullPool,
                 echo=settings.DATABASE_ECHO,
             )
             
