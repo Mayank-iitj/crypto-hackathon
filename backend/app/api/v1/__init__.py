@@ -7,9 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Background
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Optional
-import logging
 import uuid
-import asyncio
 
 from app.db.database import get_session
 from app.core.logging import get_logger
@@ -23,7 +21,7 @@ from app.services.compliance.compliance_engine import ComplianceMappingEngine
 from app.api.v1.auth import oauth_router
 
 logger = get_logger(__name__)
-api_router = APIRouter(prefix="/api/v1", tags=["Q-Shield API"])
+api_router = APIRouter(tags=["Q-Shield API"])
 
 # Include OAuth authentication routes
 api_router.include_router(oauth_router)
@@ -45,7 +43,7 @@ async def list_assets(
         query = select(Asset).offset(skip).limit(limit)
         result = await session.execute(query)
         assets = result.scalars().all()
-        return {"assets": [{"id": a.id, "hostname": a.hostname, "port": a.port, "pqc_readiness": a.pqc_readiness} for a in assets]}
+        return {"assets": [{"id": str(a.uuid), "hostname": a.hostname, "port": a.port, "pqc_readiness": a.pqc_readiness} for a in assets]}
     except Exception as e:
         logger.error(f"Error listing assets: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to list assets")
@@ -66,14 +64,14 @@ async def create_asset(
             raise HTTPException(status_code=409, detail="Asset already exists")
         
         asset = Asset(
-            id=str(uuid.uuid4()),
             hostname=hostname,
             port=port,
-            pqc_readiness="UNKNOWN"
+            pqc_readiness="unknown"
         )
         session.add(asset)
         await session.commit()
-        return {"id": asset.id, "hostname": asset.hostname, "port": asset.port}
+        await session.refresh(asset)
+        return {"id": str(asset.uuid), "hostname": asset.hostname, "port": asset.port}
     except HTTPException:
         raise
     except Exception as e:
@@ -86,10 +84,11 @@ async def create_asset(
 async def get_asset(asset_id: str, session: AsyncSession = Depends(get_session)):
     """Get asset details."""
     try:
-        asset = await session.get(Asset, asset_id)
+        result = await session.execute(select(Asset).where(Asset.uuid == uuid.UUID(asset_id)))
+        asset = result.scalar_one_or_none()
         if not asset:
             raise HTTPException(status_code=404, detail="Asset not found")
-        return {"id": asset.id, "hostname": asset.hostname, "port": asset.port, "pqc_readiness": asset.pqc_readiness, "risk_score": asset.risk_score}
+        return {"id": str(asset.uuid), "hostname": asset.hostname, "port": asset.port, "pqc_readiness": asset.pqc_readiness, "risk_score": asset.risk_score}
     except HTTPException:
         raise
     except Exception as e:
@@ -101,7 +100,8 @@ async def get_asset(asset_id: str, session: AsyncSession = Depends(get_session))
 async def delete_asset(asset_id: str, session: AsyncSession = Depends(get_session)):
     """Delete asset."""
     try:
-        asset = await session.get(Asset, asset_id)
+        result = await session.execute(select(Asset).where(Asset.uuid == uuid.UUID(asset_id)))
+        asset = result.scalar_one_or_none()
         if not asset:
             raise HTTPException(status_code=404, detail="Asset not found")
         await session.delete(asset)
@@ -127,20 +127,19 @@ async def initiate_scan(
 ):
     """Initiate cryptographic scan on targets."""
     try:
-        scan_id = str(uuid.uuid4())
         scan = Scan(
-            id=scan_id,
             scan_type=scan_type,
-            target_count=len(targets),
+            total_targets=len(targets),
             status="pending"
         )
         session.add(scan)
         await session.commit()
+        await session.refresh(scan)
         
         if background_tasks:
-            background_tasks.add_task(execute_scan_task, scan_id, targets, scan_type)
+            background_tasks.add_task(execute_scan_task, scan.uuid, targets, scan_type)
         
-        return {"scan_id": scan_id, "status": "pending", "targets": len(targets)}
+        return {"scan_id": str(scan.uuid), "status": "pending", "targets": len(targets)}
     except Exception as e:
         await session.rollback()
         logger.error(f"Error initiating scan: {str(e)}", exc_info=True)
@@ -151,15 +150,16 @@ async def initiate_scan(
 async def get_scan_status(scan_id: str, session: AsyncSession = Depends(get_session)):
     """Get scan status."""
     try:
-        scan = await session.get(Scan, scan_id)
+        result = await session.execute(select(Scan).where(Scan.uuid == uuid.UUID(scan_id)))
+        scan = result.scalar_one_or_none()
         if not scan:
             raise HTTPException(status_code=404, detail="Scan not found")
         return {
-            "scan_id": scan.id,
+            "scan_id": str(scan.uuid),
             "status": scan.status,
-            "progress": scan.completed_count / max(scan.target_count, 1),
-            "total": scan.target_count,
-            "completed": scan.completed_count
+            "progress": scan.completed_targets / max(scan.total_targets, 1),
+            "total": scan.total_targets,
+            "completed": scan.completed_targets
         }
     except HTTPException:
         raise
