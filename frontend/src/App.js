@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
@@ -382,6 +382,7 @@ function App() {
   const [complianceResult, setComplianceResult] = useState(null);
 
   const [providers, setProviders] = useState(null);
+  const sessionIdRef = useRef(`sess-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);
 
   const kpis = useMemo(() => {
     const riskKnown = assets.filter((a) => typeof a.risk_score === 'number');
@@ -400,17 +401,50 @@ function App() {
   }, [assets]);
 
   const withBusy = async (label, work) => {
+    void recordSessionActivity('operation', label, 'started', { tab: activeTab });
     setBusy(true);
     try {
       const result = await work();
       setFlash({ type: 'success', message: label });
+      void recordSessionActivity('operation', label, 'success', { tab: activeTab });
       return result;
     } catch (error) {
       setFlash({ type: 'error', message: error.message });
+      void recordSessionActivity('operation', label, 'failed', { tab: activeTab, error: error.message });
       throw error;
     } finally {
       setBusy(false);
     }
+  };
+
+  const recordSessionActivity = async (eventType, action, outcome = 'success', details = {}) => {
+    try {
+      await fetch(buildUrl('/api/v1/reports/session/activity'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          session_id: sessionIdRef.current,
+          event_type: eventType,
+          action,
+          resource: 'frontend',
+          outcome,
+          actor: 'web-user',
+          details: {
+            tab: activeTab,
+            ...details,
+          },
+        }),
+      });
+    } catch {
+      // Session analytics should never block core product workflows.
+    }
+  };
+
+  const selectTab = (tab) => {
+    setActiveTab(tab);
+    void recordSessionActivity('navigation', `tab:${tab}`, 'success');
   };
 
   const loadHealth = async () => {
@@ -435,9 +469,38 @@ function App() {
 
   useEffect(() => {
     const bootstrap = async () => {
-      await withBusy('Loaded platform state', async () => {
+      setBusy(true);
+      try {
         await Promise.all([loadHealth(), loadAssets(), loadProviders(), loadPublicInventory()]);
-      });
+        setFlash({ type: 'success', message: 'Loaded platform state' });
+      } catch (error) {
+        setFlash({ type: 'error', message: error.message });
+      } finally {
+        setBusy(false);
+      }
+
+      try {
+        await fetch(buildUrl('/api/v1/reports/session/activity'), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            session_id: sessionIdRef.current,
+            event_type: 'session',
+            action: 'session_started',
+            resource: 'frontend',
+            outcome: 'success',
+            actor: 'web-user',
+            details: {
+              session_id: sessionIdRef.current,
+              user_agent: navigator.userAgent,
+            },
+          }),
+        });
+      } catch {
+        // Non-blocking analytics hook.
+      }
     };
     bootstrap();
   }, []);
@@ -612,6 +675,30 @@ function App() {
     });
   };
 
+  const downloadSessionReport = async () => {
+    await withBusy('Session PDF report downloaded', async () => {
+      const response = await fetch(buildUrl(`/api/v1/reports/session/${sessionIdRef.current}/pdf`));
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || 'Failed to download session report');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `qshield-session-${sessionIdRef.current}.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(url);
+
+      void recordSessionActivity('report', 'session_pdf_downloaded', 'success', {
+        session_id: sessionIdRef.current,
+      });
+    });
+  };
+
   const goToGuidedStep = (stepIndex) => {
     const normalized = (stepIndex + guidedTourSteps.length) % guidedTourSteps.length;
     setGuidedStep(normalized);
@@ -664,6 +751,7 @@ function App() {
         <div className="hero-actions">
           <button type="button" onClick={loadDemoData}>Load Demo Data</button>
           <button type="button" onClick={startGuidedDemo}>Start Guided Demo</button>
+          <button type="button" onClick={downloadSessionReport}>Download Session PDF</button>
           <button type="button" className="secondary" onClick={clearDemoData}>Clear Demo</button>
         </div>
         <div className={`badge ${health?.status === 'healthy' ? 'ok' : 'down'}`}>
@@ -678,7 +766,7 @@ function App() {
               type="button"
               key={tab}
               className={activeTab === tab ? 'tab active' : 'tab'}
-              onClick={() => setActiveTab(tab)}
+              onClick={() => selectTab(tab)}
             >
               {tab}
             </button>

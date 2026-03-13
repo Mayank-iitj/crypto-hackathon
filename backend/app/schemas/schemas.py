@@ -61,6 +61,24 @@ class BaseSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class SessionActivityEvent(BaseModel):
+    """Client-reported activity for a user session."""
+
+    session_id: str = Field(..., min_length=8, max_length=128)
+    event_type: str = Field(..., min_length=2, max_length=50)
+    action: str = Field(..., min_length=2, max_length=100)
+    resource: str = Field(default="ui", max_length=255)
+    outcome: str = Field(default="success", max_length=20)
+    actor: str = Field(default="session-user", max_length=255)
+    details: dict = Field(default_factory=dict)
+
+
+class SessionActivityIngestResponse(BaseModel):
+    status: str
+    session_id: str
+    event_id: str
+
+
 class TimestampMixin(BaseModel):
     created_at: datetime
     updated_at: datetime

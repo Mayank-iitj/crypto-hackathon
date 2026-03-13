@@ -1,11 +1,15 @@
 """Q-Shield API v1 endpoints with real scan and persistence workflows."""
 
 from datetime import datetime, timezone, timedelta
+from io import BytesIO
 from typing import List, Optional, Tuple
 import hashlib
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import Body
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +23,7 @@ from app.models.models import (
     Scan,
     ScanResult,
     QuantumSafeCertificate,
+    AuditLog,
 )
 from app.services.cbom.cbom_generator import CBOMGenerator
 from app.services.certificate.certificate_engine import QuantumSafeCertificateEngine
@@ -31,6 +36,142 @@ from app.services.risk.risk_scoring import RiskScoringEngine
 logger = get_logger(__name__)
 api_router = APIRouter(tags=["Q-Shield API"])
 api_router.include_router(oauth_router)
+
+
+class SessionActivityEvent(BaseModel):
+    session_id: str = Field(..., min_length=8, max_length=64)
+    event_type: str = Field(..., min_length=2, max_length=50)
+    action: str = Field(..., min_length=2, max_length=100)
+    resource: str = Field(default="ui", max_length=255)
+    outcome: str = Field(default="success", max_length=20)
+    actor: str = Field(default="session-user", max_length=255)
+    details: dict = Field(default_factory=dict)
+
+
+class SessionActivityIngestResponse(BaseModel):
+    status: str
+    session_id: str
+    event_id: str
+
+
+def _compute_integrity_hash(payload: dict) -> str:
+    serialized = str(sorted(payload.items())).encode("utf-8", errors="ignore")
+    return hashlib.sha256(serialized).hexdigest()
+
+
+def _build_session_activity_pdf(session_id: str, events: List[AuditLog]) -> bytes:
+    try:
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import inch
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    except ImportError as exc:
+        raise HTTPException(status_code=500, detail="PDF engine unavailable") from exc
+
+    pdf_buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        pdf_buffer,
+        pagesize=letter,
+        leftMargin=0.6 * inch,
+        rightMargin=0.6 * inch,
+        topMargin=0.6 * inch,
+        bottomMargin=0.6 * inch,
+    )
+    styles = getSampleStyleSheet()
+    story = []
+
+    title_style = ParagraphStyle(
+        "SessionReportTitle",
+        parent=styles["Heading1"],
+        fontSize=20,
+        textColor=colors.HexColor("#123a66"),
+        spaceAfter=10,
+    )
+    subtitle_style = ParagraphStyle(
+        "SessionReportSubtitle",
+        parent=styles["Normal"],
+        fontSize=10,
+        textColor=colors.HexColor("#3b4c63"),
+        spaceAfter=12,
+    )
+
+    created_times = [event.created_at for event in events if event.created_at]
+    started_at = min(created_times).isoformat() if created_times else "n/a"
+    ended_at = max(created_times).isoformat() if created_times else "n/a"
+    failed_count = sum(1 for event in events if str(event.outcome).lower() != "success")
+
+    story.append(Paragraph("Q-Shield Session Activity Report", title_style))
+    story.append(
+        Paragraph(
+            f"Session ID: {session_id}<br/>Generated: {datetime.now(timezone.utc).isoformat()}",
+            subtitle_style,
+        )
+    )
+
+    overview = [
+        ["Metric", "Value"],
+        ["Total Events", str(len(events))],
+        ["Failed Events", str(failed_count)],
+        ["Session Started", started_at],
+        ["Session Ended", ended_at],
+    ]
+    overview_table = Table(overview, colWidths=[2.0 * inch, 4.8 * inch])
+    overview_table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#123a66")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cfd8e3")),
+                ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#f6f9fc")),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+    story.append(overview_table)
+    story.append(Spacer(1, 12))
+
+    story.append(Paragraph("Detailed Activity", styles["Heading2"]))
+    details_rows = [["Time (UTC)", "Type", "Action", "Outcome", "Resource"]]
+    for event in events[:500]:
+        details_rows.append(
+            [
+                event.created_at.isoformat() if event.created_at else "n/a",
+                str(event.event_type or ""),
+                str(event.action or ""),
+                str(event.outcome or ""),
+                str(event.resource or ""),
+            ]
+        )
+
+    details_table = Table(
+        details_rows,
+        colWidths=[1.35 * inch, 1.15 * inch, 2.2 * inch, 0.9 * inch, 1.2 * inch],
+        repeatRows=1,
+    )
+    details_table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1e4e79")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, 0), 8),
+                ("FONTSIZE", (0, 1), (-1, -1), 7),
+                ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#d0dbe8")),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8fbff")]),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
+    story.append(details_table)
+
+    doc.build(story)
+    pdf_buffer.seek(0)
+    return pdf_buffer.read()
 
 
 def _as_text(value) -> Optional[str]:
@@ -903,6 +1044,79 @@ async def check_compliance(
     except Exception as exc:
         logger.error(f"Compliance check failed: {exc}", exc_info=True)
         raise HTTPException(status_code=500, detail="Compliance check failed")
+
+
+@api_router.post("/reports/session/activity", response_model=SessionActivityIngestResponse)
+async def ingest_session_activity(
+    payload: SessionActivityEvent = Body(...),
+    session: AsyncSession = Depends(get_session),
+):
+    try:
+        details = payload.details or {}
+        details["session_id"] = payload.session_id
+        hash_payload = {
+            "session_id": payload.session_id,
+            "event_type": payload.event_type,
+            "action": payload.action,
+            "resource": payload.resource,
+            "outcome": payload.outcome,
+            "details": details,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+        event = AuditLog(
+            event_type=payload.event_type,
+            actor=payload.actor,
+            resource=payload.resource,
+            action=payload.action,
+            outcome=payload.outcome,
+            request_id=payload.session_id,
+            details=details,
+            integrity_hash=_compute_integrity_hash(hash_payload),
+        )
+        session.add(event)
+        await session.flush()
+
+        return {
+            "status": "recorded",
+            "session_id": payload.session_id,
+            "event_id": str(event.uuid),
+        }
+    except Exception as exc:
+        logger.error(f"Failed to ingest session activity: {exc}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to ingest session activity")
+
+
+@api_router.get("/reports/session/{session_id}/pdf")
+async def download_session_activity_report(
+    session_id: str,
+    limit: int = Query(1000, ge=1, le=5000),
+    session: AsyncSession = Depends(get_session),
+):
+    try:
+        results = await session.execute(
+            select(AuditLog)
+            .where(AuditLog.request_id == session_id)
+            .order_by(AuditLog.created_at.asc())
+            .limit(limit)
+        )
+        events = results.scalars().all()
+
+        if not events:
+            raise HTTPException(status_code=404, detail="No activity found for the requested session")
+
+        pdf_bytes = _build_session_activity_pdf(session_id, events)
+        filename = f"qshield-session-{session_id}.pdf"
+        return StreamingResponse(
+            BytesIO(pdf_bytes),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"Failed to build session activity report: {exc}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to generate session activity report")
 
 
 @api_router.get("/health", include_in_schema=False)
