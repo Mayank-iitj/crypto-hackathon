@@ -40,11 +40,11 @@ class Base(DeclarativeBase):
     # Common columns
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     created_at: Mapped[datetime] = mapped_column(
-        default=lambda: datetime.now(timezone.utc)
+        default=datetime.utcnow
     )
     updated_at: Mapped[datetime] = mapped_column(
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc)
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow
     )
 
 

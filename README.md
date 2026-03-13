@@ -34,6 +34,7 @@ Q-Shield enables banks and financial institutions to:
 | [DOCUMENTATION_INDEX.md](DOCUMENTATION_INDEX.md) | Complete doc index | Oriented reference |
 | [PRODUCTION_DEPLOYMENT_SUMMARY.md](PRODUCTION_DEPLOYMENT_SUMMARY.md) | What's included | Leads/Architects |
 | [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) | Single-server deployment | DevOps/SRE |
+| [deployment/oracle-free/README.md](deployment/oracle-free/README.md) | Best free full-stack deployment | DevOps/SRE |
 | [deployment/terraform/README.md](deployment/terraform/README.md) | AWS cloud deployment | Cloud Engineers |
 | [deployment/helm/HELM_GUIDE.md](deployment/helm/HELM_GUIDE.md) | Kubernetes deployment | K8s Operators |
 | [PRODUCTION_READINESS_CHECKLIST.md](PRODUCTION_READINESS_CHECKLIST.md) | Pre-launch validation | Engineering Leads |
@@ -45,6 +46,10 @@ Q-Shield enables banks and financial institutions to:
 | [docs/OAUTH_SETUP.md](docs/OAUTH_SETUP.md) | OAuth integration | Integrators |
 
 **→ Start here:** [QUICK_START.md](QUICK_START.md) or [DOCUMENTATION_INDEX.md](DOCUMENTATION_INDEX.md)
+
+## Best Free Deployment Target
+
+For a complete zero-cost deployment of the whole stack, use [deployment/oracle-free/README.md](deployment/oracle-free/README.md) on an Oracle Cloud Always Free VM.
 
 ## ✨ Key Features
 

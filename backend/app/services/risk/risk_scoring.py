@@ -37,8 +37,8 @@ class RiskFactor:
 @dataclass
 class RiskScoreBreakdown:
     """Detailed breakdown of risk score calculation."""
-    total_score: float  # 0-100
-    severity_level: RiskSeverity
+    total_score: float = 0.0  # 0-100
+    severity_level: RiskSeverity = RiskSeverity.INFO
     factors: List[RiskFactor] = field(default_factory=list)
     
     # Category scores

@@ -136,6 +136,24 @@ class PQCValidator:
         PQCAlgorithm.DILITHIUM_3: 3,
         PQCAlgorithm.DILITHIUM_5: 5,
     }
+
+    # NIST-standardized sets used for strict PQC label eligibility.
+    NIST_STANDARD_KEMS = {
+        PQCAlgorithm.ML_KEM_512,
+        PQCAlgorithm.ML_KEM_768,
+        PQCAlgorithm.ML_KEM_1024,
+    }
+    NIST_STANDARD_SIGNATURES = {
+        PQCAlgorithm.ML_DSA_44,
+        PQCAlgorithm.ML_DSA_65,
+        PQCAlgorithm.ML_DSA_87,
+        PQCAlgorithm.SLH_DSA_SHA2_128S,
+        PQCAlgorithm.SLH_DSA_SHA2_128F,
+        PQCAlgorithm.SLH_DSA_SHA2_192S,
+        PQCAlgorithm.SLH_DSA_SHA2_192F,
+        PQCAlgorithm.SLH_DSA_SHA2_256S,
+        PQCAlgorithm.SLH_DSA_SHA2_256F,
+    }
     
     # Quantum threats dictionary
     QUANTUM_THREATS = {
@@ -224,7 +242,12 @@ class PQCValidator:
         
         # Detect PQC algorithms
         self._detect_pqc(
-            cipher_suites, preferred_cipher, pqc_kem, pqc_signature, assessment
+            cipher_suites,
+            preferred_cipher,
+            pqc_kem,
+            pqc_signature,
+            signature_algorithm,
+            assessment,
         )
         
         # Analyze classical crypto components
@@ -257,6 +280,7 @@ class PQCValidator:
         preferred_cipher: Optional[str],
         pqc_kem: Optional[str],
         pqc_signature: Optional[str],
+        certificate_signature_algorithm: Optional[str],
         assessment: QuantumRiskAssessment
     ):
         """Detect PQC algorithm support."""
@@ -306,6 +330,21 @@ class PQCValidator:
                 assessment.hybrid_signature_detected = True
             except ValueError:
                 logger.warning(f"Unknown PQC Signature: {pqc_signature}")
+
+        if not assessment.pqc_signature_detected and certificate_signature_algorithm:
+            signature_upper = certificate_signature_algorithm.upper()
+            if "ML-DSA-87" in signature_upper:
+                assessment.pqc_signature_detected = PQCAlgorithm.ML_DSA_87
+                assessment.hybrid_signature_detected = True
+            elif "ML-DSA-65" in signature_upper:
+                assessment.pqc_signature_detected = PQCAlgorithm.ML_DSA_65
+                assessment.hybrid_signature_detected = True
+            elif "ML-DSA-44" in signature_upper:
+                assessment.pqc_signature_detected = PQCAlgorithm.ML_DSA_44
+                assessment.hybrid_signature_detected = True
+            elif "SLH-DSA" in signature_upper:
+                assessment.pqc_signature_detected = PQCAlgorithm.SLH_DSA_SHA2_128S
+                assessment.hybrid_signature_detected = True
     
     def _analyze_key_exchange(
         self,
@@ -434,23 +473,38 @@ class PQCValidator:
     
     def _calculate_readiness_level(self, assessment: QuantumRiskAssessment):
         """Determine PQC readiness level."""
-        # FULLY_QUANTUM_SAFE: Using PQC for both KEM and signatures
-        if assessment.pqc_kem_detected and assessment.pqc_signature_detected:
+        has_nist_kem = assessment.pqc_kem_detected in self.NIST_STANDARD_KEMS
+        has_nist_signature = assessment.pqc_signature_detected in self.NIST_STANDARD_SIGNATURES
+        has_any_pqc = bool(assessment.pqc_kem_detected or assessment.pqc_signature_detected)
+
+        # FULLY_QUANTUM_SAFE: NIST-standard PQC for both KEM and signatures with strong baseline.
+        if (
+            has_nist_kem and
+            has_nist_signature and
+            assessment.uses_tls_1_3 and
+            assessment.uses_ecdhe and
+            assessment.uses_aes_256 and
+            assessment.uses_sha_384_or_better
+        ):
             assessment.readiness_level = PQCReadinessLevel.FULLY_QUANTUM_SAFE
             return
         
-        # PQC_READY: Using TLS 1.3 + ECDHE + AES-256 + SHA-384
-        if (assessment.uses_tls_1_3 and 
-            assessment.uses_ecdhe and 
-            assessment.uses_aes_256 and 
-            assessment.uses_sha_384_or_better):
+        # PQC_READY: At least one NIST-standard PQC primitive in a hybrid-ready baseline.
+        if (
+            (has_nist_kem or has_nist_signature) and
+            assessment.uses_tls_1_3 and
+            assessment.uses_ecdhe and
+            assessment.uses_aes_256 and
+            assessment.uses_sha_384_or_better
+        ):
             assessment.readiness_level = PQCReadinessLevel.PQC_READY
             return
         
-        # TRANSITIONAL: Some modern crypto but not fully PQC-ready
-        if (assessment.uses_tls_1_3 and 
-            assessment.uses_ecdhe and 
-            assessment.uses_aes_256):
+        # TRANSITIONAL: Strong modern TLS posture or legacy/non-standard PQC signals.
+        if (
+            (assessment.uses_tls_1_3 and assessment.uses_ecdhe and assessment.uses_aes_256) or
+            has_any_pqc
+        ):
             assessment.readiness_level = PQCReadinessLevel.TRANSITIONAL
             return
         

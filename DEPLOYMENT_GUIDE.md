@@ -54,6 +54,20 @@ docker compose logs -f api
 
 ## Production Deployment
 
+## Best Free Platform (Recommended)
+
+Use Oracle Cloud Always Free VM for the full stack.
+
+Quick path:
+
+```bash
+cd /opt/qshield
+chmod +x deployment/oracle-free/deploy.sh
+./deployment/oracle-free/deploy.sh
+```
+
+Reference: [deployment/oracle-free/README.md](deployment/oracle-free/README.md)
+
 ### Step 1: Server Preparation
 
 ```bash

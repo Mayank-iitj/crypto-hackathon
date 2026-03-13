@@ -56,6 +56,13 @@ class DNSResolver:
             resolver = await self._get_resolver()
             result = await resolver.query(hostname, "A")
             return [r.host for r in result]
+        except TypeError:
+            # aiodns/c-ares API compatibility can differ by runtime image.
+            try:
+                addrinfo = await asyncio.to_thread(socket.getaddrinfo, hostname, None, socket.AF_INET)
+                return sorted({entry[4][0] for entry in addrinfo})
+            except OSError:
+                return []
         except aiodns.error.DNSError as e:
             logger.debug(f"DNS A query failed for {hostname}: {e}")
             return []
@@ -66,6 +73,12 @@ class DNSResolver:
             resolver = await self._get_resolver()
             result = await resolver.query(hostname, "AAAA")
             return [r.host for r in result]
+        except TypeError:
+            try:
+                addrinfo = await asyncio.to_thread(socket.getaddrinfo, hostname, None, socket.AF_INET6)
+                return sorted({entry[4][0] for entry in addrinfo})
+            except OSError:
+                return []
         except aiodns.error.DNSError:
             return []
     
@@ -104,6 +117,12 @@ class DNSResolver:
                 ipaddress.ip_address(ip).reverse_pointer, "PTR"
             )
             return result[0].host if result else None
+        except TypeError:
+            try:
+                host, _, _ = await asyncio.to_thread(socket.gethostbyaddr, ip)
+                return host
+            except OSError:
+                return None
         except (aiodns.error.DNSError, ValueError):
             return None
 
@@ -379,6 +398,17 @@ class CloudProviderDetector:
 
 class ASNLookup:
     """ASN information lookup."""
+
+    @staticmethod
+    def _normalize_country_code(value: Optional[str]) -> Optional[str]:
+        """Return a strict 2-letter uppercase country code or None."""
+        if not value:
+            return None
+
+        cleaned = value.strip().upper()
+        if len(cleaned) == 2 and cleaned.isalpha():
+            return cleaned
+        return None
     
     @staticmethod
     async def lookup(ip: str) -> Dict:
@@ -407,10 +437,16 @@ class ASNLookup:
             if len(lines) >= 2:
                 # Skip header, parse data line
                 parts = [p.strip() for p in lines[-1].split("|")]
-                if len(parts) >= 3:
+                # Expected format: AS | IP | BGP Prefix | CC | Registry | Allocated | AS Name
+                if len(parts) >= 7:
                     result["asn"] = f"AS{parts[0]}" if parts[0] else None
-                    result["country_code"] = parts[1] if parts[1] else None
-                    result["asn_name"] = parts[-1] if len(parts) > 3 else None
+                    result["country_code"] = ASNLookup._normalize_country_code(parts[3])
+                    result["asn_name"] = parts[6] if parts[6] else None
+                elif len(parts) >= 4:
+                    result["asn"] = f"AS{parts[0]}" if parts[0] else None
+                    cc_candidate = parts[1] if len(parts) > 1 else None
+                    result["country_code"] = ASNLookup._normalize_country_code(cc_candidate)
+                    result["asn_name"] = parts[-1] if parts[-1] else None
         
         except Exception as e:
             logger.debug(f"ASN lookup failed for {ip}: {e}")
