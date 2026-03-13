@@ -1,0 +1,70 @@
+# Version control
+.git
+.gitignore
+
+# Environment files (never bake secrets into image)
+.env
+.env.*
+!.env.example
+
+# Private keys
+keys/
+*.pem
+*.key
+*.crt
+*.pfx
+*.p12
+
+# Python artifacts
+**/__pycache__/
+**/*.py[cod]
+**/*.pyo
+**/*.egg-info/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.tox/
+**/.coverage
+**/htmlcov/
+**/.hypothesis/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Frontend dependencies and build artifacts
+frontend/node_modules/
+frontend/build/
+frontend/dist/
+
+# Logs
+logs/
+*.log
+
+# IDE / editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Test files
+**/tests/
+**/test_*.py
+**/*_test.py
+
+# Documentation (not needed at runtime)
+*.md
+docs/
+
+# Build artifacts
+dist/
+build/
+
+# Temporary files
+*.tmp
+*.bak
+.tmp/
+temp/

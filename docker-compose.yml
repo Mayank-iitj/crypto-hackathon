@@ -9,7 +9,7 @@ services:
     container_name: qshield-postgres
     environment:
       POSTGRES_USER: qshield
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-qshield123}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-qshield-secure-password}
       POSTGRES_DB: qshield
     ports:
       - "5432:5432"
@@ -29,11 +29,11 @@ services:
     container_name: qshield-redis
     ports:
       - "6379:6379"
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis-secure-password}
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis-secure-password}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -58,14 +58,14 @@ services:
       DATABASE_URL: postgresql+asyncpg://qshield:${DB_PASSWORD:-qshield-secure-password}@postgres:5432/qshield
       DATABASE_POOL_SIZE: 30
       DATABASE_MAX_OVERFLOW: 20
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secure-password}@redis:6379/0
       REDIS_PASSWORD: ${REDIS_PASSWORD:-redis-secure-password}
       API_HOST: 0.0.0.0
       API_PORT: 8000
       DEBUG: "false"
       LOG_LEVEL: INFO
       LOG_FORMAT: json
-      CORS_ORIGINS: '["https://dashboard.qshield.io", "https://app.qshield.io"]'
+      CORS_ORIGINS: ${CORS_ORIGINS:-'["http://localhost:3000", "http://localhost:8000"]'}
       ALLOWED_HOSTS: '["qshield.io", "*.qshield.io", "localhost", "127.0.0.1"]'
       JWT_PRIVATE_KEY_PATH: /app/keys/jwt_private.pem
       JWT_PUBLIC_KEY_PATH: /app/keys/jwt_public.pem
@@ -73,7 +73,7 @@ services:
       JWT_REFRESH_TOKEN_EXPIRE_DAYS: 7
       PLATFORM_SIGNING_KEY_PATH: /app/keys/platform_signing.pem
       PLATFORM_PUBLIC_KEY_PATH: /app/keys/platform_public.pem
-      SECRET_KEY: ${SECRET_KEY:-change-me-with-strong-secret-key-in-production}
+      SECRET_KEY: "${SECRET_KEY:?SECRET_KEY env var is required. Generate with: openssl rand -base64 48}"
       OAUTH_ALLOW_REGISTRATION: "true"
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-placeholder}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-placeholder}
@@ -129,7 +129,7 @@ services:
     image: grafana/grafana:latest
     container_name: qshield-grafana
     environment:
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin123}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-qshield-grafana-admin}
       GF_SECURITY_ADMIN_USER: admin
       GF_INSTALL_PLUGINS: grafana-piechart-panel
       GF_SECURITY_DISABLE_BRUTE_FORCE_LOGIN_PROTECTION: "false"
@@ -172,6 +172,28 @@ services:
       timeout: 10s
       retries: 5
       start_period: 40s
+
+  # Q-Shield Frontend
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: qshield-frontend
+    environment:
+      REACT_APP_API_URL: ${API_URL:-http://localhost:8000}
+    ports:
+      - "3000:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - qshield-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # Kibana Log Visualization
   kibana:

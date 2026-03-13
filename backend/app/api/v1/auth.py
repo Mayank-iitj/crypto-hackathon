@@ -111,7 +111,7 @@ async def google_callback(
         
         # Generate JWT tokens
         tokens = create_token_pair(
-            user_id=str(user.uuid),
+            subject=str(user.uuid),
             roles=[user.role.value],
             permissions=user.permissions or []
         )
@@ -203,7 +203,7 @@ async def github_callback(
         
         # Generate JWT tokens
         tokens = create_token_pair(
-            user_id=str(user.uuid),
+            subject=str(user.uuid),
             roles=[user.role.value],
             permissions=user.permissions or []
         )
@@ -295,7 +295,7 @@ async def microsoft_callback(
         
         # Generate JWT tokens
         tokens = create_token_pair(
-            user_id=str(user.uuid),
+            subject=str(user.uuid),
             roles=[user.role.value],
             permissions=user.permissions or []
         )

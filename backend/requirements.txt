@@ -15,11 +15,9 @@ alembic==1.13.0
 python-jose[cryptography]==3.3.0
 passlib[bcrypt,argon2]==1.7.4
 cryptography==41.0.7
-pyjwt==2.11.0
 
 # Cryptography Analysis
 pyOpenSSL==23.3.0
-cryptography==41.0.7
 
 # HTTP & Async
 aiohttp==3.9.1
@@ -45,7 +43,6 @@ pillow==10.1.0
 pytest==7.4.3
 pytest-asyncio==0.21.1
 pytest-cov==4.1.0
-httpx==0.25.2
 
 # Development
 black==23.12.0
