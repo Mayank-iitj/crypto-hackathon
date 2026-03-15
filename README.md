@@ -1,5 +1,7 @@
 # Q-Shield: Cryptographic Intelligence Platform for Post-Quantum Readiness
 
+![Q-Shield](https://github.com/user-attachments/assets/1b42482a-a32b-4197-80d0-8ed6a70ad97a)
+
 A production-grade, enterprise-ready platform that automatically discovers internet-facing banking assets, scans cryptographic configurations, evaluates Post-Quantum Cryptography (PQC) readiness, and issues digitally verifiable Quantum-Safe Certificates.
 
 ## 🚀 Quick Start
